@@ -3,9 +3,7 @@ import pandas as pd
 import numpy as np
 from functools import wraps
 
-
 class SQLServer(object):
-
 
     def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None, host=None, auth=None):
         self.driver = driver
@@ -16,7 +14,6 @@ class SQLServer(object):
         self.database = database
         self.host = host
         self.auth = auth
-
 
     def connect(self):
         '''
@@ -78,7 +75,6 @@ class SQLServer(object):
                 print('Connection established with %s\nUsing Database: %s' % (self.server, self.current_database))
             print('Use set_database(database) method to use a specific database')
 
-
     def testConnection(func):
         '''
         Test if is connected to SQL Server before calling any function that requires database connection
@@ -100,7 +96,6 @@ class SQLServer(object):
                 print('Connect to server with SQLServer.connect(authentication) method before calling other functions')
                 return
         return wrapper
-
 
     @testConnection
     def query(self, query, commit=False, return_option='raw'):
@@ -141,14 +136,12 @@ class SQLServer(object):
                 print('Error executing self.query(): %s' % e)
                 return 
 
-
     @testConnection
     def list_database(self):
         '''
         returns list with existing databases
         '''
         return self.query('SELECT name FROM master.dbo.sysdatabases', return_option='list')
-
 
     @testConnection
     def set_database(self, database):
@@ -169,7 +162,6 @@ class SQLServer(object):
                 print('Database %s accessed' % database)
             except Exception as e:
                 print('An error occured: %s' % e)
-
 
     @testConnection
     def detail_table(self, table, dataframe=True):
@@ -276,7 +268,6 @@ class SQLServer(object):
             # return data as dictionary
             return final_data
 
-
     @testConnection
     def list_tables(self, pandaSeries=False, from_database=False, output='dataframe'):
         '''
@@ -301,7 +292,6 @@ class SQLServer(object):
         else:
             print('Pass a valid output: "dataframe" or "list"')
             return 
-
 
     @testConnection
     def insert(self, df, table):
@@ -337,7 +327,6 @@ class SQLServer(object):
             # insert values
             self.query(sql, commit=True)
 
-
     @testConnection
     def export_(self, df, file_, file_type, json_orient):
         '''
@@ -368,7 +357,6 @@ class SQLServer(object):
         else:
             print('Pass a valid format')
             return
-
 
     @testConnection
     def export_to_file(self, tables=None, database='current', file_type='csv', json_orient='index', path=None):
@@ -433,4 +421,3 @@ class SQLServer(object):
             print('tables must be a string or a list of strings')
             return
     
-
