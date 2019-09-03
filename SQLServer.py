@@ -5,7 +5,7 @@ from functools import wraps
 
 class SQLServer(object):
 
-    def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None, host=None, auth=None):
+    def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None, host=None, auth='windows'):
         self.driver = driver
         self.server= server
         self.user = user
@@ -17,9 +17,9 @@ class SQLServer(object):
 
     def connect(self):
         '''
-        The connection wth SQL Server is established via ODBC drive 
-        If dsn attribute is passed when instantiating the class, it will force connection via data source name
-        Authentication mode (windows or sql) must be passed when calling self.connect method
+        The connection wth SQL Server is established via ODBC driver 
+        If dsn attribute is passed while instantiating the class, it will force connection via data source name
+        Authentication mode (windows or sql) also must be passed when instantiating. By default it's windows
         '''
         self.connected = False
         if self.dsn:
