@@ -18,7 +18,7 @@ class SQLServer(object):
     def connect(self):
         '''
         The connection wth SQL Server is established via ODBC drive 
-        If dsn atribute is passed when instantiating the class, it will force connection via data source name
+        If dsn attribute is passed when instantiating the class, it will force connection via data source name
         Authentication mode (windows or sql) must be passed when calling self.connect method
         '''
         self.connected = False
