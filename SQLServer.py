@@ -77,7 +77,7 @@ class SQLServer(object):
 
     def testConnection(func):
         '''
-        Test if is connected to SQL Server before calling any function that requires database connection
+        Test if it's connected to SQL Server before calling any function that requires database connection
         If not connected it will throw a notificaton
         '''
         # wraps called function
@@ -102,8 +102,9 @@ class SQLServer(object):
         '''
         Execute any T-SQL command passed 
         If commit param is set True, the effects of executed SQL statement will be saved inside the database 
-        Else, function will try to extract and store output data in lists 
-        If no data was outputed from query, it will return an empty list
+        Else, function will try to extract and store output data according to return_option param
+        Return options are: 'raw', 'list' and 'single value'
+        If no data was outputed from query, it will return None
         '''
         # execute SQL statement
         self.cursor.execute(query)
@@ -146,7 +147,7 @@ class SQLServer(object):
     @testConnection
     def set_database(self, database):
         '''
-        T-SQL USE {datbase} 
+        USE {datbase} statement
         Verifies is passed database is already in use
         If yes, it will throw a notification
         Else it will access passed database
@@ -197,6 +198,10 @@ class SQLServer(object):
         '''
         # Starts inner function that puts together passed params into sql final statement
         def get_select_statement(table, percent, columns, condition, schema):
+            '''
+            Builds SQL Statement according to passed params
+            percent, columns, condition and schema are customization params for standard select * from table statement
+            '''
             select_ = 'select '
             columns_ = '*'
             filter_ = ' from %s' % table
@@ -216,13 +221,14 @@ class SQLServer(object):
                 columns = columns.replace(' ','').split(",")    
                 
             if condition:
-                # customize
+                # customize with condition 
                 filter_ = filter_ + ' ' + condition
 
             # set final sql statement
             return select_ + columns_ + filter_, columns 
 
         try:
+            # Execute sql statement and outputs data as 'raw'
             sql_statement, df_columns = get_select_statement(table, percent, columns, condition, schema)
             output_data = self.query(sql_statement)
 
@@ -297,7 +303,7 @@ class SQLServer(object):
     def insert(self, df, table):
         '''
         Attempts to insert dataframe into table
-        Analog to Machine Learning Services in SQL Server 
+        Requires dataframe structure with column names that matches target table's columns 
         Still needs improvement
         '''
         # create sql statement
