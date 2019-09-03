@@ -412,7 +412,7 @@ class SQLServer(object):
             if path:
                 file_ = path + tables + '.' + file_type
             else:
-                file_ = tables + '.' + file_typeformat_
+                file_ = tables + '.' + file_type
             # extract the dataframe
             df = self.select(table=tables)
             # export data
