@@ -330,8 +330,17 @@ class SQLServer(object):
             string_values = ' values ('+', '.join(values)+')'
             # create final sql statement
             sql = insert + columns + string_values
-            # insert values
-            self.query(sql, commit=True)
+            print('Row %d' % i)
+            
+            try:
+                # insert values
+                self.query(sql, commit=True)
+               
+            except pyodbc.ProgrammingError as e1:
+                # print raised error information in case of invalid SQL code
+                print('Problem while inserting data')
+                print('SQL Statement: {}'.format(sql))
+                print('Raised Error: {}'.format(e1))
 
     @testConnection
     def export_(self, df, file_, file_type, json_orient):
