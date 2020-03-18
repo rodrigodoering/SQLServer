@@ -1,11 +1,13 @@
+
 import pyodbc
 import pandas as pd
-import numpy as np
 from functools import wraps
+
 
 class SQLServer(object):
 
-    def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None, host=None, auth='windows'):
+
+    def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None, host=None, auth=None):
         self.driver = driver
         self.server= server
         self.user = user
@@ -14,14 +16,15 @@ class SQLServer(object):
         self.database = database
         self.host = host
         self.auth = auth
+        self.connected = False
+
 
     def connect(self):
         '''
-        The connection wth SQL Server is established via ODBC driver 
-        If dsn attribute is passed while instantiating the class, it will force connection via data source name
-        Authentication mode (windows or sql) also must be passed when instantiating. By default it's windows
+        The connection wth SQL Server is established via ODBC drive 
+        If dsn atribute is passed when instantiating the class, it will force connection via data source name
+        Authentication mode (windows or sql) must be passed when calling self.connect method
         '''
-        self.connected = False
         if self.dsn:
             try:
                 if self.auth == 'windows':
@@ -71,40 +74,47 @@ class SQLServer(object):
             
             if self.dsn:
                 print('Connection established with %s\nUsing Database: %s' % (self.dsn, self.current_database))
+                    
             else:
                 print('Connection established with %s\nUsing Database: %s' % (self.server, self.current_database))
             print('Use set_database(database) method to use a specific database')
 
+
+    def close_connection(self):
+        '''
+        Forces connection to database to be terminated 
+        Although, according to pyodbc documentation, "Connections are automatically closed when they are deleted"
+        '''
+        self.connection.close()
+        self.connected = False
+
+
     def testConnection(func):
         '''
-        Test if it's connected to SQL Server before calling any function that requires database connection
+        Test if is connected to SQL Server before calling any function that requires database connection
         If not connected it will throw a notificaton
         '''
         # wraps called function
         # decorates all functions that requires database connection
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            # tests if connected attr exists
-            if hasattr(self, 'connected'):
-                if self.connected:
-                    # return wrapped function
-                    return func(self, *args, **kwargs)
-                else:
-                    print('Cannot call %s. There was a problem connecting to SQL Server' % func.__name__)
-                    return 
+            # tests if connected 
+            if self.connected:
+                # return wrapped function
+                return func(self, *args, **kwargs)
             else:
-                print('Connect to server with SQLServer.connect(authentication) method before calling other functions')
-                return
+                print('Cannot call %s. No connection to SQL Server' % func.__name__)
+                return 
         return wrapper
+
 
     @testConnection
     def query(self, query, commit=False, return_option='raw'):
         '''
         Execute any T-SQL command passed 
         If commit param is set True, the effects of executed SQL statement will be saved inside the database 
-        Else, function will try to extract and store output data according to return_option param
-        Return options are: 'raw', 'list' and 'single value'
-        If no data was outputed from query, it will return None
+        Else, function will try to extract and store output data in lists 
+        If no data was outputed from query, it will return an empty list
         '''
         # execute SQL statement
         self.cursor.execute(query)
@@ -137,6 +147,7 @@ class SQLServer(object):
                 print('Error executing self.query(): %s' % e)
                 return 
 
+
     @testConnection
     def list_database(self):
         '''
@@ -144,25 +155,30 @@ class SQLServer(object):
         '''
         return self.query('SELECT name FROM master.dbo.sysdatabases', return_option='list')
 
+
     @testConnection
     def set_database(self, database):
         '''
-        USE {datbase} statement
+        T-SQL USE {datbase} 
         Verifies is passed database is already in use
         If yes, it will throw a notification
         Else it will access passed database
         '''
         if database == self.current_database:
             print('%s already being used' % database)
+
         else:
+
             try:
                 # change database
                 self.query('USE %s' % database, commit=True)
                 # updates current database attribute
                 self.current_database = database
                 print('Database %s accessed' % database)
+
             except Exception as e:
                 print('An error occured: %s' % e)
+
 
     @testConnection
     def detail_table(self, table, dataframe=True):
@@ -183,13 +199,14 @@ class SQLServer(object):
         if dataframe:
             # return as dataframe
             return pd.DataFrame(data)
+
         else:
             # return as dict
             return data
 
 
     @testConnection
-    def select(self, table, percent=None, columns=None, condition=None, dataframe=True, schema=None):
+    def select(self, table, percent=None, columns=None, condition=None, dataframe=True, schema=None, verbose=True):
         '''
         Outputs data from SQL Select statement using some passed params
         If no param was passed, a simple "SELECT * FROM TABLE" statement will be executed
@@ -198,10 +215,6 @@ class SQLServer(object):
         '''
         # Starts inner function that puts together passed params into sql final statement
         def get_select_statement(table, percent, columns, condition, schema):
-            '''
-            Builds SQL Statement according to passed params
-            percent, columns, condition and schema are customization params for standard select * from table statement
-            '''
             select_ = 'select '
             columns_ = '*'
             filter_ = ' from %s' % table
@@ -221,25 +234,26 @@ class SQLServer(object):
                 columns = columns.replace(' ','').split(",")    
                 
             if condition:
-                # customize with condition 
+                # customize
                 filter_ = filter_ + ' ' + condition
 
             # set final sql statement
             return select_ + columns_ + filter_, columns 
 
         try:
-            # Execute sql statement and outputs data as 'raw'
             sql_statement, df_columns = get_select_statement(table, percent, columns, condition, schema)
             output_data = self.query(sql_statement)
 
         except Exception:
             # a probable error here is extracting a table from a database that requires table schema without passing it, raising "invalid object name" SQL error
             # it will attempt to find the table with it's schema
-            print('Error while executing query, attempting to query table with schema')
+            if verbose:
+                print('Error while executing query, attempting to query table with schema')
             # find table's schema
             schema = self.query("SELECT TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '%s'" % table, return_option='single value')
             # try again passing extracted schema
             sql_statement, df_columns = get_select_statement(table, percent, columns, condition, schema)
+            output_data = False
 
             try:
                 # tries again to import data now passing valid table schema
@@ -247,12 +261,16 @@ class SQLServer(object):
 
             except Exception as e:
                 # if error persists, return Nonetype
-                print("Coudn't extract data, returning None")
-                print('Raised error: %s' % e)
+                if verbose:
+                    print("Coudn't extract data, returning None")
+
+                print('Raised error during select function call: %s' % e)
 
         if not output_data:
             # checks if any data was outputed from query
-            print('No data returned from query, returning None')
+            if verbose:
+                print('No data returned from query, returning None')
+                
             return
         
         # creates empty dictionary to store and structure data 
@@ -270,9 +288,11 @@ class SQLServer(object):
         if dataframe:
             # return data as dataframe
             return pd.DataFrame(final_data)
+
         else:
             # return data as dictionary
             return final_data
+
 
     @testConnection
     def list_tables(self, pandaSeries=False, from_database=False, output='dataframe'):
@@ -299,11 +319,11 @@ class SQLServer(object):
             print('Pass a valid output: "dataframe" or "list"')
             return 
 
+
     @testConnection
     def insert(self, df, table):
         '''
         Attempts to insert dataframe into table
-        Requires dataframe structure with column names that matches target table's columns 
         Still needs improvement
         '''
         # create sql statement
@@ -331,19 +351,19 @@ class SQLServer(object):
             # create final sql statement
             sql = insert + columns + string_values
             print('Row %d' % i)
-            
+
             try:
                 # insert values
                 self.query(sql, commit=True)
-               
-            except pyodbc.ProgrammingError as e1:
-                # print raised error information in case of invalid SQL code
-                print('Problem while inserting data')
+            
+            except Exception as e:
+                print('Unexpected error occured')
                 print('SQL Statement: {}'.format(sql))
-                print('Raised Error: {}'.format(e1))
+                print('Raised Error: {}'.format(e))
 
+            
     @testConnection
-    def export_(self, df, file_, file_type, json_orient):
+    def export_(self, df, file_, file_type, json_orient='index'):
         '''
         Export data from dataframe to specified file path, format and json orientation (if passed)
         Created primarily to be used within export_to_file function, although it might be used separately as well
@@ -371,7 +391,8 @@ class SQLServer(object):
                 df.to_string(out, columns=columns)
         else:
             print('Pass a valid format')
-            return
+            return None
+
 
     @testConnection
     def export_to_file(self, tables=None, database='current', file_type='csv', json_orient='index', path=None):
@@ -387,7 +408,7 @@ class SQLServer(object):
         if file_type not in ['csv', 'xlsx', 'txt', 'json']:
             # print notification
             print('Choose a valid format: csv, xlsx, txt or json')
-            return
+            return None
 
         # format path 
         if path and path[-1] != '\\':
@@ -405,14 +426,16 @@ class SQLServer(object):
             # create list with tables to be exported
             if path:
                 # adds path to save table
-                files = list(map(lambda table: path + table + '.' + file_type, tables))          
+                files = list(map(lambda table: path + table + '.' + file_type, tables))    
+
             else:
                 files = list(map(lambda table: table + '.' + file_type, tables)) 
 
-            # loop through tableslist
+            # loop through tablelist
             for file_ , table in zip(files, tables):
                 # extract table as dataframe
                 print('Exporting table %s as %s' % (table, file_type))
+
                 try:
                     df = self.select(table=table)
                     # export dataframe 
@@ -426,13 +449,16 @@ class SQLServer(object):
             # same as above but for a single table
             if path:
                 file_ = path + tables + '.' + file_type
+                
             else:
                 file_ = tables + '.' + file_type
             # extract the dataframe
             df = self.select(table=tables)
             # export data
             self.export_(df, file_, file_type, json_orient)
+
         else:
-            print('tables must be a string or a list of strings')
-            return
+            print('Tables must be a string or a list of strings')
+            return None
     
+
