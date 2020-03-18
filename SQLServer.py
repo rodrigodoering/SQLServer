@@ -205,6 +205,38 @@ class SQLServer(object):
             return data
 
 
+    @staticmethod
+    def get_select_statement(table, percent, columns, condition, schema):
+        '''
+        function that puts together passed params into sql final statement
+        Called only in SQLServer.select() 
+        '''
+        select_ = 'select '
+        columns_ = '*'
+        filter_ = ' from %s' % table
+        # check for specifications to build select query with passed params
+        if schema:
+            # adds table's schema
+            table = schema + '.' + table 
+            filter_ = ' from %s' % table
+
+        if percent:
+            # customize number of returned rows
+            select_ = 'select top(%s) percent ' % percent
+
+        if columns:
+            # customized returned columns
+            columns_ = columns
+            columns = columns.replace(' ','').split(",")    
+            
+        if condition:
+            # customize
+            filter_ = filter_ + ' ' + condition
+
+        # set final sql statement
+        return select_ + columns_ + filter_, columns 
+
+
     @testConnection
     def select(self, table, percent=None, columns=None, condition=None, dataframe=True, schema=None, verbose=True):
         '''
@@ -213,35 +245,8 @@ class SQLServer(object):
         Returns output data as a pandas dataframe (default) or as a simple dictionary
         Still needs improvement 
         '''
-        # Starts inner function that puts together passed params into sql final statement
-        def get_select_statement(table, percent, columns, condition, schema):
-            select_ = 'select '
-            columns_ = '*'
-            filter_ = ' from %s' % table
-            # check for specifications to build select query with passed params
-            if schema:
-                # adds table's schema
-                table = schema + '.' + table 
-                filter_ = ' from %s' % table
-
-            if percent:
-                # customize number of returned rows
-                select_ = 'select top(%s) percent ' % percent
-
-            if columns:
-                # customized returned columns
-                columns_ = columns
-                columns = columns.replace(' ','').split(",")    
-                
-            if condition:
-                # customize
-                filter_ = filter_ + ' ' + condition
-
-            # set final sql statement
-            return select_ + columns_ + filter_, columns 
-
         try:
-            sql_statement, df_columns = get_select_statement(table, percent, columns, condition, schema)
+            sql_statement, df_columns = SQLServer.get_select_statement(table, percent, columns, condition, schema)
             output_data = self.query(sql_statement)
 
         except Exception:
@@ -252,7 +257,7 @@ class SQLServer(object):
             # find table's schema
             schema = self.query("SELECT TABLE_SCHEMA FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = '%s'" % table, return_option='single value')
             # try again passing extracted schema
-            sql_statement, df_columns = get_select_statement(table, percent, columns, condition, schema)
+            sql_statement, df_columns = SQLServer.get_select_statement(table, percent, columns, condition, schema)
             output_data = False
 
             try:
@@ -317,7 +322,7 @@ class SQLServer(object):
         
         else:
             print('Pass a valid output: "dataframe" or "list"')
-            return 
+            return None
 
 
     @testConnection
