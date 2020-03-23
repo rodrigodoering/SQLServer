@@ -1,70 +1,117 @@
-
 import pyodbc
 import pandas as pd
 from functools import wraps
 
+def control_transactions(Class_SQLServer):
+    class Handler(object):
+        def __init__(self,*args,**kwargs):
+            self.obj = Class_SQLServer(*args,**kwargs)
+            self.require_connection = ['query',
+                                       'list_database',
+                                       'set_database',
+                                       'detail_table', 
+                                       'select', 
+                                       'list_tables', 
+                                       'insert', 
+                                       'export_to_file']
 
+        @staticmethod
+        def connect_notification(*args, **kwargs):
+            print('No connection to SQL Server, use SQLServer.connect(auth)')
+            return None
+        
+        def __getattribute__(self, name):
+            try:    
+                _attr_ = super(Handler ,self).__getattribute__(name)
+            except AttributeError: 
+                pass
+            else:
+                return _attr_
+
+            _attr_ = self.obj.__getattribute__(name)
+            
+            if callable(_attr_) and _attr_.__name__ in self.require_connection:
+                if self.obj.connected:
+                    return _attr_
+                else:
+                    return Handler.connect_notification
+            else:
+                return _attr_
+    return Handler
+
+
+@control_transactions
 class SQLServer(object):
-
-
-    def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None, host=None, auth=None):
+    def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None):
         self.driver = driver
         self.server= server
         self.user = user
         self.password = password
         self.dsn = dsn
         self.database = database
-        self.host = host
-        self.auth = auth
         self.connected = False
 
-
-    def connect(self):
+    def connect(self, connection_string=None, auth='windows'):
         '''
         The connection wth SQL Server is established via ODBC drive 
         If dsn attribute is passed when instantiating the class, it will force connection via Data Source Name
         Authentication mode can be either windows or sql, default is 'windows'
         '''
-        if self.dsn:
+        if connection_string:
             try:
-                if self.auth == 'windows':
-                    # connects using only dsn
-                    self.connection = pyodbc.connect('DSN='+self.dsn)
-                    self.connected = True
+                self.connection = pyodbc.connect(connection_string)
+                self.connected = True
 
-                elif self.auth == 'sql':
-                    # connects using dsn, user and password
-                    self.connection = pyodbc.connect('DSN='+self.dsn+';UID='+self.user+';PWD='+self.password) 
-                    self.connected = True
-            
-                else:   
-                    # supports only this two connection presets (windows and sql)
-                    print('Pass a valid authentication mode')
             except Exception as e:
-                print('Erro: %s' % e)
+                self.conn_error = e
+                print('Erro %s' % e)
         else:
-            # tries regular pyodb connection passing directly sql params
-            try:
-                if self.auth == 'windows':
-                    # connects using driver, server and database
-                    self.connection = pyodbc.connect('DRIVER={'+self.driver+
-                                            '};SERVER='+self.server+
-                                            ';Trusted_Connection=yes;DATABASE='+self.database)
-                    self.connected = True               
-                elif self.auth == 'sql':
-                    # connects using driver, host, database, user and password
-                    self.connection = pyodbc.connect(driver=self.driver,
-                                            host=self.host,
-                                            database=self.database,
-                                            user=self.user,
-                                            password=self.password
-                                            )
-                    self.connected = True
-                else:
-                    print('Pass a valid authentication mode')
-            except Exception as e:
-                print('Erro: %s' % e)
+            if self.dsn:
+                try:
+                    if auth == 'windows':
+                        # connects using only dsn
+                        self.connection = pyodbc.connect('DSN='+self.dsn)
+                        self.connected = True
 
+                    elif auth == 'sql':
+                        # connects using dsn, user and password
+                        self.connection = pyodbc.connect('DSN='+self.dsn+';UID='+self.user+';PWD='+self.password) 
+                        self.connected = True
+                
+                    else:   
+                        # supports only this two connection presets (windows and sql)
+                        print('Pass either "windows" or "sql" as authentication method')
+
+                except Exception as e:
+                    self.conn_error = e
+                    print('Erro: %s' % e)             
+            else:
+                # tries regular pyodb connection passing directly sql params
+                try:
+                    if auth == 'windows':
+                        # connects using driver, server and database
+                        self.connection = pyodbc.connect('DRIVER={'+self.driver+
+                                                         '};SERVER='+self.server+
+                                                         ';Trusted_Connection=yes;DATABASE='+self.database)
+                        self.connected = True
+
+                    elif auth == 'sql':
+                        # connects using driver, server, database, user and password
+                        self.connection = pyodbc.connect(driver=self.driver,
+                                                server=self.server,
+                                                database=self.database,
+                                                uid=self.user,
+                                                pwd=self.password
+                                                )
+                        self.connected = True
+
+                    else:
+                        print('Pass a valid authentication mode')
+
+                except Exception as e:
+                    self.conn_error = e
+                    print('Erro: %s' % e)
+                    
         if self.connected:
             # sets cursor
             self.cursor = self.connection.cursor()
@@ -77,8 +124,8 @@ class SQLServer(object):
                     
             else:
                 print('Connection established with %s\nUsing Database: %s' % (self.server, self.current_database))
-            print('Use set_database(database) method to use a specific database')
 
+            print('Use set_database(database) method to use a specific database')
 
     def close_connection(self):
         '''
@@ -89,27 +136,6 @@ class SQLServer(object):
         self.connection.close()
         self.connected = False
 
-
-    def testConnection(func):
-        '''
-        Checks if there is established connection with SQL Server before calling any function that requires database connection
-        If not connected it will throw a notificaton
-        '''
-        # wraps called function
-        # decorates all functions that requires database connection
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            # tests if connected 
-            if self.connected:
-                # return wrapped function
-                return func(self, *args, **kwargs)
-            else:
-                print('Cannot call %s. No connection to SQL Server' % func.__name__)
-                return None
-        return wrapper
-
-
-    @testConnection
     def query(self, query, commit=False, return_option='raw'):
         '''
         Execute any T-SQL command passed 
@@ -119,10 +145,8 @@ class SQLServer(object):
         '''
         # execute SQL statement
         self.cursor.execute(query)
-
         if commit:
-            self.connection.commit()
-            
+            self.connection.commit()            
         else:
             try:
                 # store data returned from sql server in lists
@@ -131,7 +155,7 @@ class SQLServer(object):
                     # query will output a single value
                     output = [row for row in self.cursor.fetchall()]
                     return [value[0] for value in output][0]
-
+                
                 elif return_option == 'list':
                     # return data as list
                     output = [row for row in self.cursor.fetchall()]
@@ -149,16 +173,12 @@ class SQLServer(object):
                 print('Error executing self.query(): %s' % e)
                 return None
 
-
-    @testConnection
     def list_database(self):
         '''
         returns list with existing databases
         '''
         return self.query('SELECT name FROM master.dbo.sysdatabases', return_option='list')
 
-
-    @testConnection
     def set_database(self, database):
         '''
         T-SQL 'USE {datbase}' statement
@@ -168,9 +188,8 @@ class SQLServer(object):
         '''
         if database == self.current_database:
             print('%s already being used' % database)
-
+            
         else:
-
             try:
                 # change database
                 self.query('USE %s' % database, commit=True)
@@ -181,8 +200,6 @@ class SQLServer(object):
             except Exception as e:
                 print('An error occured: %s' % e)
 
-
-    @testConnection
     def detail_table(self, table, dataframe=True):
         '''
         Return column names, data types and nullable status from passed table
@@ -205,7 +222,6 @@ class SQLServer(object):
         else:
             # return as dict
             return data
-
 
     @staticmethod
     def get_select_statement(table, percent, columns, condition, schema):
@@ -238,8 +254,6 @@ class SQLServer(object):
         # set final sql statement
         return select_ + columns_ + filter_, columns 
 
-
-    @testConnection
     def select(self, table, percent=None, columns=None, condition=None, dataframe=True, schema=None, verbose=True):
         '''
         Outputs data from SQL Select statement using some passed params
@@ -300,8 +314,6 @@ class SQLServer(object):
             # return data as dictionary
             return final_data
 
-
-    @testConnection
     def list_tables(self, pandaSeries=False, from_database=False, output='dataframe'):
         '''
         Returns list with all existing tables in current database
@@ -326,8 +338,6 @@ class SQLServer(object):
             print('Pass a valid output: "dataframe" or "list"')
             return None
 
-
-    @testConnection
     def insert(self, df, table):
         '''
         Attempts to insert dataframe into table
@@ -369,7 +379,6 @@ class SQLServer(object):
                 print('SQL Statement: {}'.format(sql))
                 print('Raised Error: {}'.format(e))
 
-            
     @staticmethod
     def export_(self, df, file_, file_type, json_orient='index'):
         '''
@@ -401,8 +410,6 @@ class SQLServer(object):
             print('Pass a valid format')
             return None
 
-
-    @testConnection
     def export_to_file(self, tables=None, database='current', file_type='csv', json_orient='index', path=None):
         '''
         Export tables as flat files
@@ -468,5 +475,3 @@ class SQLServer(object):
         else:
             print('Tables must be either a string or a list of strings')
             return None
-    
-
