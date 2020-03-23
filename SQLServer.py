@@ -290,9 +290,8 @@ class SQLServer(object):
         if not output_data:
             # checks if any data was outputed from query
             if verbose:
-                print('No data returned from query, returning None')
-                
-            return
+                print('No data returned from query, returning None')            
+            return None
         
         # creates empty dictionary to store and structure data 
         final_data = {}
