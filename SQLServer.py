@@ -3,45 +3,46 @@ import pandas as pd
 from functools import wraps
 
 def control_transactions(Class_SQLServer):
-    class Handler(object):
+    class Handler(Class_SQLServer):
+        require_connection = ['query',
+                              'list_database',
+                              'set_database',
+                              'detail_table', 
+                              'select', 
+                              'list_tables', 
+                              'insert', 
+                              'export_to_file']
+
         def __init__(self,*args,**kwargs):
-            self.obj = Class_SQLServer(*args,**kwargs)
-            self.require_connection = ['query',
-                                       'list_database',
-                                       'set_database',
-                                       'detail_table', 
-                                       'select', 
-                                       'list_tables', 
-                                       'insert', 
-                                       'export_to_file']
+            super().__init__(*args,**kwargs)
+
+        def __getattribute__(self, name):
+            attribute = object.__getattribute__(self, name)
+
+            if not callable(attribute):
+                return attribute
+
+            else:
+                if attribute.__name__ in Handler.require_connection:
+                    connected = object.__getattribute__(self, 'connected')
+                    if connected:
+                        return attribute
+                    else:
+                        return Handler.connect_notification
+                else:
+                    return attribute
 
         @staticmethod
         def connect_notification(*args, **kwargs):
             print('No connection to SQL Server, use SQLServer.connect(auth)')
-            return None
-        
-        def __getattribute__(self, name):
-            try:    
-                _attr_ = super(Handler ,self).__getattribute__(name)
-            except AttributeError: 
-                pass
-            else:
-                return _attr_
+            return None        
 
-            _attr_ = self.obj.__getattribute__(name)
-            
-            if callable(_attr_) and _attr_.__name__ in self.require_connection:
-                if self.obj.connected:
-                    return _attr_
-                else:
-                    return Handler.connect_notification
-            else:
-                return _attr_
     return Handler
 
 
 @control_transactions
 class SQLServer(object):
+
     def __init__(self, driver=None, server=None, user=None, password=None, dsn=None, database=None):
         self.driver = driver
         self.server= server
@@ -50,7 +51,15 @@ class SQLServer(object):
         self.dsn = dsn
         self.database = database
         self.connected = False
-
+        self.require_connection = ['query',
+                                    'list_database',
+                                    'set_database',
+                                    'detail_table', 
+                                    'select', 
+                                    'list_tables', 
+                                    'insert', 
+                                    'export_to_file']
+    
     def connect(self, connection_string=None, auth='windows'):
         '''
         The connection wth SQL Server is established via ODBC drive 
@@ -65,6 +74,7 @@ class SQLServer(object):
             except Exception as e:
                 self.conn_error = e
                 print('Erro %s' % e)
+
         else:
             if self.dsn:
                 try:
@@ -84,7 +94,8 @@ class SQLServer(object):
 
                 except Exception as e:
                     self.conn_error = e
-                    print('Erro: %s' % e)             
+                    print('Erro: %s' % e)
+                    
             else:
                 # tries regular pyodb connection passing directly sql params
                 try:
@@ -111,7 +122,7 @@ class SQLServer(object):
                 except Exception as e:
                     self.conn_error = e
                     print('Erro: %s' % e)
-                    
+
         if self.connected:
             # sets cursor
             self.cursor = self.connection.cursor()
@@ -145,8 +156,10 @@ class SQLServer(object):
         '''
         # execute SQL statement
         self.cursor.execute(query)
+
         if commit:
-            self.connection.commit()            
+            self.connection.commit()
+            
         else:
             try:
                 # store data returned from sql server in lists
@@ -155,7 +168,7 @@ class SQLServer(object):
                     # query will output a single value
                     output = [row for row in self.cursor.fetchall()]
                     return [value[0] for value in output][0]
-                
+
                 elif return_option == 'list':
                     # return data as list
                     output = [row for row in self.cursor.fetchall()]
@@ -188,8 +201,9 @@ class SQLServer(object):
         '''
         if database == self.current_database:
             print('%s already being used' % database)
-            
+
         else:
+
             try:
                 # change database
                 self.query('USE %s' % database, commit=True)
@@ -290,8 +304,9 @@ class SQLServer(object):
         if not output_data:
             # checks if any data was outputed from query
             if verbose:
-                print('No data returned from query, returning None')            
-            return None
+                print('No data returned from query, returning None')
+                
+            return
         
         # creates empty dictionary to store and structure data 
         final_data = {}
