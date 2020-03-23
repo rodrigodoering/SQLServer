@@ -3,7 +3,9 @@ import pandas as pd
 from functools import wraps
 
 def control_transactions(Class_SQLServer):
+    
     class Handler(Class_SQLServer):
+        
         require_connection = ['query',
                               'list_database',
                               'set_database',
@@ -51,14 +53,6 @@ class SQLServer(object):
         self.dsn = dsn
         self.database = database
         self.connected = False
-        self.require_connection = ['query',
-                                    'list_database',
-                                    'set_database',
-                                    'detail_table', 
-                                    'select', 
-                                    'list_tables', 
-                                    'insert', 
-                                    'export_to_file']
     
     def connect(self, connection_string=None, auth='windows'):
         '''
