@@ -2,8 +2,8 @@ import pyodbc
 import pandas as pd
 from functools import wraps
 
-
 def control_transactions(Obj_SQLServer):
+    
     class Handler(Obj_SQLServer):
 
         require_connection = ['query',
