@@ -453,57 +453,7 @@ class SQLServer(object):
 
     
 
-if __name__ == '__main__':
-    
-    db = SQLServer(dsn='DSN_redhouse')
-    db.connect('Azure_Migration_escolas')
 
-    df = db.queryData("""
-             select 
-                hist.ano, 
-                hist.creche, 
-                hist.pre_escola, 
-                hist.fund_final, 
-                hist.fund_inicial, 
-                hist.ensino_medio, 
-                esc.nome as escola, 
-                esc.n_alunos,
-                esc.endereco,
-                esc.numero,
-                esc.bairro,
-                esc.cep,
-                esc.cidade,
-                esc.estado,
-                esc.telefone,
-                esc.email,
-				esc.concorrente
-             from 
-                TB_Hist_Matriculas hist
-             left join 
-                TB_Escola esc
-             on 
-                hist.cod_INEP = esc.cod_INEP
-             where 
-				ano = 2020 
-			and 
-				hist.cod_INEP in (
-					select 
-						cod_INEP 
-					from 
-						TB_Escola 
-					where
-                       concorrente = 1
-				)
-			 
-			order by esc.n_alunos desc
-        
-        """
-        )
-    
-    df.to_excel('Base_concorrentes_08_11_21.xlsx', index=False)
-    
-    
-    
 
     
     
